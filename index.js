@@ -106,13 +106,30 @@ function normalizeKey(key) {
 }
 
 /**
+ * Check if the input looks like a file path to a keystore
+ */
+function isKeystorePath(input) {
+  if (!input) return false;
+  const normalized = input.trim();
+  // Check for common keystore extensions
+  if (normalized.endsWith('.p12') || normalized.endsWith('.pfx')) return true;
+  // Check for absolute paths with keystore extensions
+  if ((normalized.startsWith('/') || normalized.startsWith('~') || /^[A-Za-z]:[\\/]/.test(normalized)) &&
+      (normalized.includes('.p12') || normalized.includes('.pfx'))) return true;
+  return false;
+}
+
+/**
  * Check if the input looks like a PKCS#12 keystore (base64-encoded binary)
+ * Kept for backwards compatibility
  */
 function isPkcs12(input) {
   if (!input) return false;
   const normalized = input.trim();
   // PEM keys start with -----BEGIN
   if (normalized.startsWith('-----BEGIN')) return false;
+  // File paths are handled separately
+  if (isKeystorePath(normalized)) return false;
   // Check if it's valid base64 and reasonably long (keystores are usually > 1KB)
   try {
     const decoded = Buffer.from(normalized, 'base64');
@@ -123,9 +140,30 @@ function isPkcs12(input) {
 }
 
 /**
+ * Read keystore from file path
+ */
+function readKeystoreFile(filePath) {
+  const fs = require('fs');
+  const path = require('path');
+
+  // Expand ~ to home directory
+  let resolvedPath = filePath.trim();
+  if (resolvedPath.startsWith('~')) {
+    const homedir = require('os').homedir();
+    resolvedPath = path.join(homedir, resolvedPath.slice(1));
+  }
+
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`Keystore file not found: ${resolvedPath}`);
+  }
+
+  return fs.readFileSync(resolvedPath);
+}
+
+/**
  * Extract private key from PKCS#12 keystore
  */
-function extractKeyFromPkcs12(p12Base64, password, keyAlias) {
+function extractKeyFromPkcs12(p12Data, password, keyAlias) {
   let forge;
   try {
     forge = require('node-forge');
@@ -134,7 +172,14 @@ function extractKeyFromPkcs12(p12Base64, password, keyAlias) {
   }
 
   try {
-    const p12Der = forge.util.decode64(p12Base64);
+    // Handle both Buffer and base64 string input
+    let p12Der;
+    if (Buffer.isBuffer(p12Data)) {
+      p12Der = p12Data.toString('binary');
+    } else {
+      p12Der = forge.util.decode64(p12Data);
+    }
+
     const p12Asn1 = forge.asn1.fromDer(p12Der);
     const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password || '');
 
@@ -190,19 +235,26 @@ function extractKeyFromPkcs12(p12Base64, password, keyAlias) {
 }
 
 /**
- * Resolve the private key - handles PEM, PKCS#12 keystore, or HMAC secret
+ * Resolve the private key - handles PEM, PKCS#12 keystore file, or HMAC secret
  */
 function resolvePrivateKey(keyInput, keystorePassword, keyAlias) {
   if (!keyInput) return keyInput;
 
-  const normalized = normalizeKey(keyInput.trim());
+  const trimmed = keyInput.trim();
 
-  // If it looks like a PKCS#12 keystore, extract the key
-  if (isPkcs12(keyInput.trim())) {
-    return extractKeyFromPkcs12(keyInput.trim(), keystorePassword || '', keyAlias || '');
+  // Check if it's a keystore file path
+  if (isKeystorePath(trimmed)) {
+    const keystoreData = readKeystoreFile(trimmed);
+    return extractKeyFromPkcs12(keystoreData, keystorePassword || '', keyAlias || '');
   }
 
-  return normalized;
+  // Check if it's base64-encoded keystore (backwards compatibility)
+  if (isPkcs12(trimmed)) {
+    return extractKeyFromPkcs12(trimmed, keystorePassword || '', keyAlias || '');
+  }
+
+  // Otherwise treat as PEM key or HMAC secret
+  return normalizeKey(trimmed);
 }
 
 /**
@@ -340,9 +392,9 @@ module.exports.templateTags = [
       },
       {
         displayName: 'Private Key / Keystore',
-        description: 'PEM private key, HMAC secret, or base64-encoded PKCS#12 keystore. Use {{ _.var_name }} for env vars.',
+        description: 'PEM private key, HMAC secret, or path to PKCS#12 keystore (.p12/.pfx)',
         type: 'string',
-        placeholder: '{{ _.jws_private_key }}',
+        placeholder: '/path/to/keystore.p12',
       },
       {
         displayName: 'Keystore Password',
@@ -591,7 +643,9 @@ module.exports.base64UrlDecode = base64UrlDecode;
 
 // Keystore utilities (exported for testing)
 module.exports.isPkcs12 = isPkcs12;
+module.exports.isKeystorePath = isKeystorePath;
 module.exports.extractKeyFromPkcs12 = extractKeyFromPkcs12;
+module.exports.readKeystoreFile = readKeystoreFile;
 module.exports.resolvePrivateKey = resolvePrivateKey;
 module.exports.normalizeKey = normalizeKey;
 

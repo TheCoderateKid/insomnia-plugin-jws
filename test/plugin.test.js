@@ -682,11 +682,42 @@ describe('JWSPlugin', () => {
       expect(plugin.isPkcs12('my-hmac-secret-key')).toBe(false);
     });
 
+    test('isPkcs12 should return false for keystore file paths', () => {
+      expect(plugin.isPkcs12('/path/to/keystore.p12')).toBe(false);
+      expect(plugin.isPkcs12('~/keys/my-key.pfx')).toBe(false);
+    });
+
     test('isPkcs12 should return true for valid base64 encoded data of sufficient length', () => {
       // Create a large enough base64 string that mimics a keystore
       const fakeKeystoreData = Buffer.alloc(600).fill('A');
       const base64Data = fakeKeystoreData.toString('base64');
       expect(plugin.isPkcs12(base64Data)).toBe(true);
+    });
+  });
+
+  describe('Keystore Path Detection', () => {
+    test('isKeystorePath should return true for .p12 files', () => {
+      expect(plugin.isKeystorePath('/path/to/keystore.p12')).toBe(true);
+      expect(plugin.isKeystorePath('keystore.p12')).toBe(true);
+      expect(plugin.isKeystorePath('~/keys/my-key.p12')).toBe(true);
+    });
+
+    test('isKeystorePath should return true for .pfx files', () => {
+      expect(plugin.isKeystorePath('/path/to/keystore.pfx')).toBe(true);
+      expect(plugin.isKeystorePath('keystore.pfx')).toBe(true);
+      expect(plugin.isKeystorePath('C:\\keys\\my-key.pfx')).toBe(true);
+    });
+
+    test('isKeystorePath should return false for non-keystore paths', () => {
+      expect(plugin.isKeystorePath('/path/to/key.pem')).toBe(false);
+      expect(plugin.isKeystorePath('secret-key')).toBe(false);
+      expect(plugin.isKeystorePath('')).toBe(false);
+      expect(plugin.isKeystorePath(null)).toBe(false);
+    });
+
+    test('isKeystorePath should return false for PEM keys', () => {
+      const pemKey = '-----BEGIN PRIVATE KEY-----\nMIIEvg...\n-----END PRIVATE KEY-----';
+      expect(plugin.isKeystorePath(pemKey)).toBe(false);
     });
   });
 

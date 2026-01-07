@@ -79,7 +79,7 @@ The plugin will automatically sign your request body and add the signature heade
 | Option | Description | Example |
 |--------|-------------|---------|
 | Algorithm | Signing algorithm | RS256, ES256, HS256, etc. |
-| Private Key / Keystore | PEM key, HMAC secret, or base64 PKCS#12 | `{{ _.jws_private_key }}` |
+| Private Key / Keystore | PEM key, HMAC secret, or path to .p12/.pfx | `{{ _.jws_keystore_path }}` |
 | Keystore Password | Password for PKCS#12 keystore | `{{ _.jws_keystore_password }}` |
 | Key Alias | Alias of key in keystore | `{{ _.jws_key_alias }}` |
 | Payload Source | Where to get the payload | Request Body or Custom Value |
@@ -124,7 +124,7 @@ Output: `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..signature`
 Environment:
 ```json
 {
-  "jws_keystore": "MIIKQQIBAzCCCgcGCSqGSIb3DQEHAaCCCfgEggn0MIIJ8DCCBGcGCSqGS...",
+  "jws_keystore_path": "/path/to/keystore.p12",
   "jws_keystore_password": "changeit",
   "jws_key_alias": "my-signing-key"
 }
@@ -132,7 +132,7 @@ Environment:
 
 Header value:
 ```
-{% jwsSignature 'RS256', '{{ _.jws_keystore }}', '{{ _.jws_keystore_password }}', '{{ _.jws_key_alias }}', 'request_body', '', true, false, '', '' %}
+{% jwsSignature 'RS256', '{{ _.jws_keystore_path }}', '{{ _.jws_keystore_password }}', '{{ _.jws_key_alias }}', 'request_body', '', true, false, '', '' %}
 ```
 
 ### Unencoded Payload (RFC 7797)
@@ -187,29 +187,29 @@ my-super-secret-key-at-least-32-characters
 
 For enterprise environments using Java-style keystores:
 
-1. **Convert your keystore to base64:**
-   ```bash
-   base64 -i your-keystore.p12 | tr -d '\n'
-   ```
-
-2. **Add to your Insomnia environment:**
+1. **Add to your Insomnia environment:**
    ```json
    {
-     "jws_keystore": "MIIKQQIBAzCCCgcGCSqGSIb3DQEHAaCCCfgEggn0MIIJ8DCCBGcGCSqGS...",
+     "jws_keystore_path": "/path/to/your-keystore.p12",
      "jws_keystore_password": "your-keystore-password",
      "jws_key_alias": "my-signing-key"
    }
    ```
 
-3. **Use in template tag:**
-   - Private Key / Keystore: `{{ _.jws_keystore }}`
+2. **Use in template tag:**
+   - Private Key / Keystore: `{{ _.jws_keystore_path }}`
    - Keystore Password: `{{ _.jws_keystore_password }}`
    - Key Alias: `{{ _.jws_key_alias }}`
+
+**Example paths:**
+- macOS/Linux: `/Users/you/keys/keystore.p12` or `~/keys/keystore.p12`
+- Windows: `C:\Users\you\keys\keystore.pfx`
 
 **Notes:**
 - If you don't specify a key alias, the first private key in the keystore will be used
 - If you specify an alias that doesn't exist, the error message will list available aliases
 - Keystore support requires running `npm install` in the plugin folder (installs `node-forge`)
+- Base64-encoded keystores are still supported for backwards compatibility
 
 ## Auto-Sign Mode
 
