@@ -191,6 +191,7 @@ describe('JWSPlugin', () => {
           payload: '{"test": true}',
           privateKey: testKeys.hmacSecret,
           detached: false,
+          includeIat: false, // Disable iat for deterministic test
         };
 
         const result1 = plugin.generateJws(options);
@@ -408,19 +409,19 @@ describe('JWSPlugin', () => {
         expect(header.x5t).toBe('abc123');
       });
 
-      test('should always include alg and typ', () => {
+      test('should always include alg header', () => {
         const result = plugin.generateJws({
           algorithm: 'RS256',
           payload: '{"test": true}',
           privateKey: testKeys.rsaPrivate,
           detached: false,
+          includeIat: false,
         });
 
         const parts = result.split('.');
         const header = JSON.parse(plugin.base64UrlDecode(parts[0]).toString());
 
         expect(header.alg).toBe('RS256');
-        expect(header.typ).toBe('JWT');
       });
     });
 
@@ -453,7 +454,7 @@ describe('JWSPlugin', () => {
     const jwsTag = plugin.templateTags.find(t => t.name === 'jwsSignature');
 
     test('should have correct number of arguments', () => {
-      expect(jwsTag.args.length).toBe(10);
+      expect(jwsTag.args.length).toBe(11);
     });
 
     test('should have algorithm as first argument with enum type', () => {
@@ -485,7 +486,7 @@ describe('JWSPlugin', () => {
       };
 
       await expect(
-        jwsTag.run(context, 'HS256', '', '', '', 'request_body', '', true, false, '', ''),
+        jwsTag.run(context, 'HS256', '', '', '', 'request_body', '', true, false, '', true, ''),
       ).rejects.toThrow('Private key or secret is required');
     });
 
@@ -507,6 +508,7 @@ describe('JWSPlugin', () => {
         true, // detached
         false, // unencoded
         '',
+        true, // includeIat
         '',
       );
 
@@ -533,6 +535,7 @@ describe('JWSPlugin', () => {
         false,
         false,
         '',
+        false, // includeIat - disabled to test payload without iat
         '',
       );
 
@@ -560,6 +563,7 @@ describe('JWSPlugin', () => {
         false,
         false,
         'my-key-id',
+        false, // includeIat
         '{"iss": "test-app"}',
       );
 
@@ -589,9 +593,68 @@ describe('JWSPlugin', () => {
           false,
           false,
           '',
+          true, // includeIat
           'invalid json{',
         ),
       ).rejects.toThrow('Invalid additional headers JSON');
+    });
+
+    test('run should include iat and crit headers when includeIat is true', async () => {
+      const context = {
+        request: {
+          getBody: () => ({ text: '{}' }),
+        },
+      };
+
+      const result = await jwsTag.run(
+        context,
+        'HS256',
+        testKeys.hmacSecret,
+        '',
+        '',
+        'request_body',
+        '',
+        false,
+        false,
+        '',
+        true, // includeIat
+        '',
+      );
+
+      const parts = result.split('.');
+      const header = JSON.parse(plugin.base64UrlDecode(parts[0]).toString());
+
+      expect(header.iat).toBeDefined();
+      expect(typeof header.iat).toBe('number');
+      expect(header.crit).toContain('iat');
+    });
+
+    test('run should not include iat when includeIat is false', async () => {
+      const context = {
+        request: {
+          getBody: () => ({ text: '{}' }),
+        },
+      };
+
+      const result = await jwsTag.run(
+        context,
+        'HS256',
+        testKeys.hmacSecret,
+        '',
+        '',
+        'request_body',
+        '',
+        false,
+        false,
+        '',
+        false, // includeIat
+        '',
+      );
+
+      const parts = result.split('.');
+      const header = JSON.parse(plugin.base64UrlDecode(parts[0]).toString());
+
+      expect(header.iat).toBeUndefined();
     });
   });
 

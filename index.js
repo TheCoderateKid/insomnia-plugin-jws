@@ -313,19 +313,25 @@ function generateJws(options) {
     detached = true,
     unencoded = false,
     keyId,
+    includeIat = true,
     additionalHeaders = {},
   } = options;
 
   // Build JWS header
   const header = {
     alg: algorithm,
-    typ: 'JWT',
     ...additionalHeaders,
   };
 
   // Add key ID if provided
   if (keyId) {
     header.kid = keyId;
+  }
+
+  // Add issued at timestamp and mark as critical
+  if (includeIat) {
+    header.iat = Math.floor(Date.now() / 1000);
+    header.crit = header.crit ? [...header.crit, 'iat'] : ['iat'];
   }
 
   // Handle unencoded payload (RFC 7797)
@@ -443,6 +449,12 @@ module.exports.templateTags = [
         placeholder: 'my-key-id',
       },
       {
+        displayName: 'Include Issued At (iat)',
+        description: 'Include iat timestamp in header with crit: ["iat"]',
+        type: 'boolean',
+        defaultValue: true,
+      },
+      {
         displayName: 'Additional Headers (JSON)',
         description: 'Additional JWS header fields as JSON object',
         type: 'string',
@@ -461,6 +473,7 @@ module.exports.templateTags = [
       detached,
       unencoded,
       keyId,
+      includeIat,
       additionalHeadersJson,
     ) {
       // Validate private key
@@ -503,6 +516,7 @@ module.exports.templateTags = [
           detached,
           unencoded,
           keyId: keyId || undefined,
+          includeIat,
           additionalHeaders,
         });
       } catch (error) {

@@ -7,6 +7,7 @@ An Insomnia plugin for generating JWS (JSON Web Signature) signatures, including
 - **Multiple Algorithms**: HS256/384/512, RS256/384/512, PS256/384/512, ES256/384/512
 - **Detached Payload Mode**: Generates `header..signature` format (RFC 7515)
 - **Unencoded Payload Mode**: RFC 7797 support with `b64: false`
+- **Issued At Header**: Automatic `iat` timestamp with `crit: ["iat"]` for replay protection
 - **PEM Keys**: Standard PEM-formatted private keys
 - **PKCS#12 Keystores**: Support for .p12/.pfx keystores with password and key alias
 - **Template Tag**: Use `{% jwsSignature %}` anywhere in your requests
@@ -87,6 +88,7 @@ The plugin will automatically sign your request body and add the signature heade
 | Detached Payload | Use `header..signature` format | true/false |
 | Unencoded Payload | RFC 7797 mode | true/false |
 | Key ID (kid) | Key ID for JWS header | `{{ _.jws_key_id }}` |
+| Include Issued At (iat) | Add iat timestamp with crit: ["iat"] | true (default) |
 | Additional Headers | Extra JWS header fields | `{"iss": "my-app"}` |
 
 ## Usage Examples
@@ -102,21 +104,30 @@ Environment:
 
 Header value:
 ```
-{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '', '' %}
+{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '', true, '' %}
 ```
 
-Output: `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..signature`
+Output: `eyJhbGciOiJSUzI1NiIsImlhdCI6MTcwNDY3MjAwMCwiY3JpdCI6WyJpYXQiXX0..signature`
+
+**Default JWS Header:**
+```json
+{
+  "alg": "RS256",
+  "iat": 1704672000,
+  "crit": ["iat"]
+}
+```
 
 ### ES256 with Key ID
 
 ```
-{% jwsSignature 'ES256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '{{ _.jws_key_id }}', '' %}
+{% jwsSignature 'ES256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '{{ _.jws_key_id }}', true, '' %}
 ```
 
 ### HS256 with Custom Headers
 
 ```
-{% jwsSignature 'HS256', '{{ _.hmac_secret }}', '', '', 'request_body', '', false, false, '', '{"iss":"my-app"}' %}
+{% jwsSignature 'HS256', '{{ _.hmac_secret }}', '', '', 'request_body', '', false, false, '', true, '{"iss":"my-app"}' %}
 ```
 
 ### PKCS#12 Keystore
@@ -132,7 +143,7 @@ Environment:
 
 Header value:
 ```
-{% jwsSignature 'RS256', '{{ _.jws_keystore_path }}', '{{ _.jws_keystore_password }}', '{{ _.jws_key_alias }}', 'request_body', '', true, false, '', '' %}
+{% jwsSignature 'RS256', '{{ _.jws_keystore_path }}', '{{ _.jws_keystore_password }}', '{{ _.jws_key_alias }}', 'request_body', '', true, false, '', true, '' %}
 ```
 
 ### Unencoded Payload (RFC 7797)
@@ -140,10 +151,10 @@ Header value:
 Some APIs require signatures over the raw payload without base64 encoding:
 
 ```
-{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, true, '', '' %}
+{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, true, '', true, '' %}
 ```
 
-This adds `"b64": false` and `"crit": ["b64"]` to the JWS header.
+This adds `"b64": false` and `"crit": ["b64", "iat"]` to the JWS header.
 
 ## Key Formats
 
@@ -263,13 +274,25 @@ const signature = generateJws({
   algorithm: 'RS256',
   payload: '{"test": true}',
   privateKey: '-----BEGIN PRIVATE KEY-----...',
-  keystorePassword: null,  // for PKCS#12
-  keyAlias: null,          // for PKCS#12
+  keystorePassword: null,  // for PKCS#12 file path
+  keyAlias: null,          // for PKCS#12 with multiple keys
   detached: true,
   unencoded: false,
   keyId: 'my-key',
+  includeIat: true,        // adds iat timestamp and crit: ["iat"]
   additionalHeaders: { iss: 'my-app' },
 });
+```
+
+**Generated header structure:**
+```json
+{
+  "alg": "RS256",
+  "kid": "my-key",
+  "iat": 1704672000,
+  "crit": ["iat"],
+  "iss": "my-app"
+}
 ```
 
 ## Development
