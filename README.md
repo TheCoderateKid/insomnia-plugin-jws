@@ -16,30 +16,27 @@ An Insomnia plugin for generating JWS (JSON Web Signature) signatures, including
 
 ## Installation
 
-### Option 1: Manual Installation
+Clone the repo directly into your Insomnia plugins folder:
 
-1. Find your Insomnia plugins folder:
-   - **macOS**: `~/Library/Application Support/Insomnia/plugins/`
-   - **Windows**: `%APPDATA%\Insomnia\plugins\`
-   - **Linux**: `~/.config/Insomnia/plugins/`
-
-2. Create the plugin folder:
-   ```bash
-   mkdir -p ~/.config/Insomnia/plugins/insomnia-plugin-jws
-   ```
-
-3. Copy `package.json` and `index.js` to that folder
-
-4. Restart Insomnia
-
-### Option 2: NPM Link (Development)
-
+**macOS:**
 ```bash
-cd insomnia-plugin-jws
-npm link
-cd ~/.config/Insomnia/plugins
-npm link insomnia-plugin-jws
+cd ~/Library/Application\ Support/Insomnia/plugins
+git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
 ```
+
+**Linux:**
+```bash
+cd ~/.config/Insomnia/plugins
+git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
+```
+
+**Windows:**
+```bash
+cd %APPDATA%\Insomnia\plugins
+git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
+```
+
+Then restart Insomnia. That's it — no `npm install` required.
 
 ## Usage
 
@@ -77,17 +74,27 @@ To disable: Select "Disable JWS Auto-Sign" from the same menu.
 
 Store your key in an environment variable and reference it:
 
-1. In your environment, add:
-   ```json
-   {
-     "jws_private_key": "-----BEGIN PRIVATE KEY-----\n..."
-   }
-   ```
+1. In Insomnia, click the environment dropdown → **Manage Environments**
+2. Add your keys to the JSON:
 
-2. In the template tag's Private Key field, use:
-   ```
-   {{ _.jws_private_key }}
-   ```
+```json
+{
+  "jws_algorithm": "RS256",
+  "jws_key_id": "my-key-123",
+  "jws_private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7o5MFSJ5JXRkv\npxPF5v8KzZl7mGXcQNkLW8YIxMyUzdHcCTg9mTnR4KLtKPJbR5Y3wQCiVFxzgf3c\n...\n-----END PRIVATE KEY-----",
+  "hmac_secret": "your-hmac-secret-key-at-least-256-bits"
+}
+```
+
+> **Note**: For PEM keys, replace actual newlines with `\n` so it stays valid JSON.
+
+3. In the template tag fields, reference them with `{{ _.variable_name }}`:
+
+| Field | Value |
+|-------|-------|
+| Algorithm | (select from dropdown, or use env var) |
+| Private Key | `{{ _.jws_private_key }}` |
+| Key ID | `{{ _.jws_key_id }}` |
 
 ## Examples
 
@@ -233,11 +240,7 @@ npm run lint:fix
 
 ### CI/CD
 
-This project uses GitHub Actions for continuous integration. On every push and pull request:
-
-1. **Test Job**: Runs the test suite across Node.js 18.x, 20.x, and 22.x
-2. **Integration Test Job**: Runs integration tests
-3. **Validate Plugin Job**: Validates the plugin structure and exports
+This project uses GitHub Actions for continuous integration. On every push and pull request, it runs linting, tests, and validates the plugin structure.
 
 See `.github/workflows/test.yml` for the full workflow configuration.
 
