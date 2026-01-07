@@ -106,15 +106,118 @@ function normalizeKey(key) {
 }
 
 /**
+ * Check if the input looks like a PKCS#12 keystore (base64-encoded binary)
+ */
+function isPkcs12(input) {
+  if (!input) return false;
+  const normalized = input.trim();
+  // PEM keys start with -----BEGIN
+  if (normalized.startsWith('-----BEGIN')) return false;
+  // Check if it's valid base64 and reasonably long (keystores are usually > 1KB)
+  try {
+    const decoded = Buffer.from(normalized, 'base64');
+    return decoded.length > 500 && normalized.length > 100;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extract private key from PKCS#12 keystore
+ */
+function extractKeyFromPkcs12(p12Base64, password, keyAlias) {
+  let forge;
+  try {
+    forge = require('node-forge');
+  } catch (e) {
+    throw new Error('PKCS#12 keystore support requires node-forge. Run: npm install node-forge');
+  }
+
+  try {
+    const p12Der = forge.util.decode64(p12Base64);
+    const p12Asn1 = forge.asn1.fromDer(p12Der);
+    const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password || '');
+
+    // Find the private key - try by alias first if provided
+    let privateKey = null;
+    let foundAlias = null;
+
+    // Get all bags
+    const bags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
+    const keyBags = bags[forge.pki.oids.pkcs8ShroudedKeyBag] || [];
+
+    // Also check unencrypted key bags
+    const bags2 = p12.getBags({ bagType: forge.pki.oids.keyBag });
+    const keyBags2 = bags2[forge.pki.oids.keyBag] || [];
+
+    const allKeyBags = [...keyBags, ...keyBags2];
+
+    if (allKeyBags.length === 0) {
+      throw new Error('No private key found in keystore');
+    }
+
+    // If alias specified, find matching key
+    if (keyAlias) {
+      for (const bag of allKeyBags) {
+        const bagAlias = bag.attributes?.friendlyName?.[0] || 
+                         bag.attributes?.localKeyId?.[0];
+        if (bagAlias === keyAlias) {
+          privateKey = bag.key;
+          foundAlias = bagAlias;
+          break;
+        }
+      }
+      if (!privateKey) {
+        // List available aliases for helpful error
+        const availableAliases = allKeyBags
+          .map(b => b.attributes?.friendlyName?.[0] || b.attributes?.localKeyId?.[0])
+          .filter(Boolean);
+        throw new Error(`Key alias '${keyAlias}' not found. Available: ${availableAliases.join(', ') || '(none)'}`);
+      }
+    } else {
+      // No alias specified - use first key
+      privateKey = allKeyBags[0].key;
+      foundAlias = allKeyBags[0].attributes?.friendlyName?.[0] || 'default';
+    }
+
+    return forge.pki.privateKeyToPem(privateKey);
+  } catch (e) {
+    if (e.message.includes('Invalid password') || e.message.includes('PKCS#12 MAC')) {
+      throw new Error('Invalid keystore password');
+    }
+    if (e.message.includes('Key alias')) {
+      throw e;
+    }
+    throw new Error(`Failed to parse keystore: ${e.message}`);
+  }
+}
+
+/**
+ * Resolve the private key - handles PEM, PKCS#12 keystore, or HMAC secret
+ */
+function resolvePrivateKey(keyInput, keystorePassword, keyAlias) {
+  if (!keyInput) return keyInput;
+
+  const normalized = normalizeKey(keyInput.trim());
+
+  // If it looks like a PKCS#12 keystore, extract the key
+  if (isPkcs12(keyInput.trim())) {
+    return extractKeyFromPkcs12(keyInput.trim(), keystorePassword || '', keyAlias || '');
+  }
+
+  return normalized;
+}
+
+/**
  * Sign data using the specified algorithm and key
  */
-function sign(algorithm, key, data) {
+function sign(algorithm, key, data, keystorePassword, keyAlias) {
   const cryptoAlg = getCryptoAlgorithm(algorithm);
-  const normalizedKey = normalizeKey(key);
+  const resolvedKey = resolvePrivateKey(key, keystorePassword, keyAlias);
 
   // HMAC algorithms
   if (algorithm.startsWith('HS')) {
-    const hmac = crypto.createHmac(cryptoAlg, normalizedKey);
+    const hmac = crypto.createHmac(cryptoAlg, resolvedKey);
     hmac.update(data);
     return hmac.digest();
   }
@@ -123,7 +226,7 @@ function sign(algorithm, key, data) {
   if (algorithm.startsWith('RS')) {
     const signer = crypto.createSign(cryptoAlg);
     signer.update(data);
-    return signer.sign(normalizedKey);
+    return signer.sign(resolvedKey);
   }
 
   // RSA-PSS algorithms
@@ -131,7 +234,7 @@ function sign(algorithm, key, data) {
     const signer = crypto.createSign(cryptoAlg);
     signer.update(data);
     return signer.sign({
-      key: normalizedKey,
+      key: resolvedKey,
       padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
       saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
     });
@@ -141,7 +244,7 @@ function sign(algorithm, key, data) {
   if (algorithm.startsWith('ES')) {
     const signer = crypto.createSign(cryptoAlg);
     signer.update(data);
-    const derSignature = signer.sign(normalizedKey);
+    const derSignature = signer.sign(resolvedKey);
     return derToJws(derSignature, algorithm);
   }
 
@@ -156,6 +259,8 @@ function generateJws(options) {
     algorithm = 'RS256',
     payload,
     privateKey,
+    keystorePassword,
+    keyAlias,
     detached = true,
     unencoded = false,
     keyId,
@@ -195,7 +300,7 @@ function generateJws(options) {
   const signingInput = `${encodedHeader}.${signaturePayload}`;
 
   // Generate signature
-  const signature = sign(algorithm, privateKey, signingInput);
+  const signature = sign(algorithm, privateKey, signingInput, keystorePassword, keyAlias);
   const encodedSignature = base64UrlEncode(signature);
 
   // Return detached or compact serialization
@@ -237,10 +342,22 @@ module.exports.templateTags = [
         ],
       },
       {
-        displayName: 'Private Key (PEM) or Secret',
-        description: 'Private key in PEM format for RSA/ECDSA, or secret for HMAC. Can use environment variable.',
+        displayName: 'Private Key / Keystore',
+        description: 'PEM private key, HMAC secret, or base64-encoded PKCS#12 keystore. Use {{ _.var_name }} for env vars.',
         type: 'string',
-        placeholder: '-----BEGIN PRIVATE KEY-----\n...',
+        placeholder: '{{ _.jws_private_key }}',
+      },
+      {
+        displayName: 'Keystore Password',
+        description: 'Password for PKCS#12 keystore (leave empty if using PEM key)',
+        type: 'string',
+        placeholder: '{{ _.jws_keystore_password }}',
+      },
+      {
+        displayName: 'Key Alias',
+        description: 'Alias of the key in PKCS#12 keystore (leave empty to use first key)',
+        type: 'string',
+        placeholder: '{{ _.jws_key_alias }}',
       },
       {
         displayName: 'Payload Source',
@@ -288,6 +405,8 @@ module.exports.templateTags = [
       context,
       algorithm,
       privateKey,
+      keystorePassword,
+      keyAlias,
       payloadSource,
       customPayload,
       detached,
@@ -330,6 +449,8 @@ module.exports.templateTags = [
           algorithm,
           payload,
           privateKey,
+          keystorePassword: keystorePassword || undefined,
+          keyAlias: keyAlias || undefined,
           detached,
           unencoded,
           keyId: keyId || undefined,
@@ -360,6 +481,10 @@ module.exports.requestHooks = [
     const privateKey = await context.store.getItem('jws:privateKey');
     if (!privateKey) return;
 
+    // Get keystore password and alias if stored
+    const keystorePassword = await context.store.getItem('jws:keystorePassword');
+    const keyAlias = await context.store.getItem('jws:keyAlias');
+
     // Get request body
     const body = request.getBody();
     const payload = body.text || '';
@@ -369,6 +494,8 @@ module.exports.requestHooks = [
       algorithm: config.algorithm || 'RS256',
       payload,
       privateKey,
+      keystorePassword: keystorePassword || undefined,
+      keyAlias: keyAlias || undefined,
       detached: config.detached !== false,
       unencoded: config.unencoded || false,
       keyId: config.keyId,
@@ -400,12 +527,20 @@ module.exports.workspaceActions = [
 
       if (!algorithm) return;
 
-      const privateKey = await app.prompt('Private Key / Secret', {
-        label: 'Enter your private key (PEM) or HMAC secret',
+      const privateKey = await app.prompt('Private Key / Keystore', {
+        label: 'Enter PEM key, HMAC secret, or base64-encoded PKCS#12 keystore',
         inputType: 'textarea',
       });
 
       if (!privateKey) return;
+
+      const keystorePassword = await app.prompt('Keystore Password (optional)', {
+        label: 'Password for PKCS#12 keystore (leave empty for PEM keys)',
+      });
+
+      const keyAlias = await app.prompt('Key Alias (optional)', {
+        label: 'Alias of key in keystore (leave empty to use first key)',
+      });
 
       const headerName = await app.prompt('Header Name', {
         defaultValue: 'X-JWS-Signature',
@@ -413,7 +548,7 @@ module.exports.workspaceActions = [
       });
 
       const keyId = await app.prompt('Key ID (optional)', {
-        label: 'Optional key identifier',
+        label: 'Optional key identifier for JWS header (kid)',
       });
 
       // Store configuration
@@ -426,6 +561,12 @@ module.exports.workspaceActions = [
       }));
 
       await context.store.setItem('jws:privateKey', privateKey);
+      if (keystorePassword) {
+        await context.store.setItem('jws:keystorePassword', keystorePassword);
+      }
+      if (keyAlias) {
+        await context.store.setItem('jws:keyAlias', keyAlias);
+      }
 
       await app.alert('Success', 'JWS auto-sign configured. Signatures will be added to requests automatically.');
     },
@@ -436,6 +577,8 @@ module.exports.workspaceActions = [
     action: async (context, _models) => {
       await context.store.removeItem('jws:autoSign');
       await context.store.removeItem('jws:privateKey');
+      await context.store.removeItem('jws:keystorePassword');
+      await context.store.removeItem('jws:keyAlias');
       await context.app.alert('Success', 'JWS auto-sign disabled.');
     },
   },
@@ -448,4 +591,10 @@ module.exports.workspaceActions = [
 module.exports.generateJws = generateJws;
 module.exports.base64UrlEncode = base64UrlEncode;
 module.exports.base64UrlDecode = base64UrlDecode;
+
+// Keystore utilities (exported for testing)
+module.exports.isPkcs12 = isPkcs12;
+module.exports.extractKeyFromPkcs12 = extractKeyFromPkcs12;
+module.exports.resolvePrivateKey = resolvePrivateKey;
+module.exports.normalizeKey = normalizeKey;
 

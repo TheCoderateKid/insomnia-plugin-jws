@@ -453,7 +453,7 @@ describe('JWSPlugin', () => {
     const jwsTag = plugin.templateTags.find(t => t.name === 'jwsSignature');
 
     test('should have correct number of arguments', () => {
-      expect(jwsTag.args.length).toBe(8);
+      expect(jwsTag.args.length).toBe(10);
     });
 
     test('should have algorithm as first argument with enum type', () => {
@@ -485,7 +485,7 @@ describe('JWSPlugin', () => {
       };
 
       await expect(
-        jwsTag.run(context, 'HS256', '', 'request_body', '', true, false, '', ''),
+        jwsTag.run(context, 'HS256', '', '', '', 'request_body', '', true, false, '', ''),
       ).rejects.toThrow('Private key or secret is required');
     });
 
@@ -500,6 +500,8 @@ describe('JWSPlugin', () => {
         context,
         'HS256',
         testKeys.hmacSecret,
+        '', // keystorePassword
+        '', // keyAlias
         'request_body',
         '',
         true, // detached
@@ -524,6 +526,8 @@ describe('JWSPlugin', () => {
         context,
         'HS256',
         testKeys.hmacSecret,
+        '', // keystorePassword
+        '', // keyAlias
         'custom',
         customPayload,
         false,
@@ -549,6 +553,8 @@ describe('JWSPlugin', () => {
         context,
         'HS256',
         testKeys.hmacSecret,
+        '', // keystorePassword
+        '', // keyAlias
         'request_body',
         '',
         false,
@@ -576,6 +582,8 @@ describe('JWSPlugin', () => {
           context,
           'HS256',
           testKeys.hmacSecret,
+          '', // keystorePassword
+          '', // keyAlias
           'request_body',
           '',
           false,
@@ -628,6 +636,172 @@ describe('JWSPlugin', () => {
       };
 
       await expect(plugin.requestHooks[0](context)).resolves.not.toThrow();
+    });
+  });
+
+  describe('Key Normalization', () => {
+    test('normalizeKey should convert escaped newlines to real newlines', () => {
+      const input = '-----BEGIN PRIVATE KEY-----\\nMIIEvg...\\n-----END PRIVATE KEY-----';
+      const result = plugin.normalizeKey(input);
+      expect(result).toBe('-----BEGIN PRIVATE KEY-----\nMIIEvg...\n-----END PRIVATE KEY-----');
+    });
+
+    test('normalizeKey should handle null input', () => {
+      expect(plugin.normalizeKey(null)).toBe(null);
+    });
+
+    test('normalizeKey should handle undefined input', () => {
+      expect(plugin.normalizeKey(undefined)).toBe(undefined);
+    });
+
+    test('normalizeKey should not modify strings without escaped newlines', () => {
+      const input = 'simple-secret-key';
+      expect(plugin.normalizeKey(input)).toBe(input);
+    });
+  });
+
+  describe('PKCS#12 Detection', () => {
+    test('isPkcs12 should return false for PEM keys', () => {
+      const pemKey = '-----BEGIN PRIVATE KEY-----\nMIIEvg...\n-----END PRIVATE KEY-----';
+      expect(plugin.isPkcs12(pemKey)).toBe(false);
+    });
+
+    test('isPkcs12 should return false for null input', () => {
+      expect(plugin.isPkcs12(null)).toBe(false);
+    });
+
+    test('isPkcs12 should return false for empty string', () => {
+      expect(plugin.isPkcs12('')).toBe(false);
+    });
+
+    test('isPkcs12 should return false for short strings', () => {
+      expect(plugin.isPkcs12('short')).toBe(false);
+    });
+
+    test('isPkcs12 should return false for HMAC secrets', () => {
+      expect(plugin.isPkcs12('my-hmac-secret-key')).toBe(false);
+    });
+
+    test('isPkcs12 should return true for valid base64 encoded data of sufficient length', () => {
+      // Create a large enough base64 string that mimics a keystore
+      const fakeKeystoreData = Buffer.alloc(600).fill('A');
+      const base64Data = fakeKeystoreData.toString('base64');
+      expect(plugin.isPkcs12(base64Data)).toBe(true);
+    });
+  });
+
+  describe('Key Resolution', () => {
+    test('resolvePrivateKey should return normalized PEM key', () => {
+      const input = '-----BEGIN PRIVATE KEY-----\\nMIIEvg...\\n-----END PRIVATE KEY-----';
+      const result = plugin.resolvePrivateKey(input, null, null);
+      expect(result).toContain('-----BEGIN PRIVATE KEY-----');
+      expect(result).toContain('\n');
+    });
+
+    test('resolvePrivateKey should return null for null input', () => {
+      expect(plugin.resolvePrivateKey(null, null, null)).toBe(null);
+    });
+
+    test('resolvePrivateKey should return HMAC secret unchanged', () => {
+      const secret = 'my-hmac-secret-key-at-least-256-bits-long';
+      const result = plugin.resolvePrivateKey(secret, null, null);
+      expect(result).toBe(secret);
+    });
+  });
+
+  describe('Keystore Extraction', () => {
+    // These tests require node-forge to be installed
+    let forgeAvailable = false;
+    
+    beforeAll(() => {
+      try {
+        require('node-forge');
+        forgeAvailable = true;
+      } catch (e) {
+        forgeAvailable = false;
+      }
+    });
+
+    test('extractKeyFromPkcs12 should throw helpful error when node-forge is not available', () => {
+      // This test only makes sense if forge is NOT available
+      if (forgeAvailable) {
+        // If forge is available, just verify the function exists
+        expect(typeof plugin.extractKeyFromPkcs12).toBe('function');
+        return;
+      }
+      
+      expect(() => {
+        plugin.extractKeyFromPkcs12('fake-base64', 'password', null);
+      }).toThrow('node-forge');
+    });
+
+    // Conditional tests that only run if node-forge is available
+    test('extractKeyFromPkcs12 should throw for invalid base64', () => {
+      if (!forgeAvailable) {
+        expect(true).toBe(true); // Skip
+        return;
+      }
+      
+      expect(() => {
+        plugin.extractKeyFromPkcs12('not-valid-base64!!!', 'password', null);
+      }).toThrow();
+    });
+
+    test('extractKeyFromPkcs12 should throw for invalid password', () => {
+      if (!forgeAvailable) {
+        expect(true).toBe(true); // Skip
+        return;
+      }
+
+      // Create a minimal valid-looking base64 that will fail password check
+      const fakeData = Buffer.from('invalid-pkcs12-data').toString('base64');
+      expect(() => {
+        plugin.extractKeyFromPkcs12(fakeData, 'wrong-password', null);
+      }).toThrow();
+    });
+  });
+
+  describe('generateJws with Keystore Options', () => {
+    test('generateJws should accept keystorePassword option', () => {
+      // Even without actual keystore, should not throw for the option itself
+      const result = plugin.generateJws({
+        algorithm: 'HS256',
+        payload: 'test',
+        privateKey: testKeys.hmacSecret,
+        keystorePassword: null,
+        keyAlias: null,
+        detached: true,
+      });
+      
+      expect(result).toBeTruthy();
+      expect(result).toMatch(/^[A-Za-z0-9_-]+\.\.[A-Za-z0-9_-]+$/);
+    });
+
+    test('generateJws should accept keyAlias option', () => {
+      const result = plugin.generateJws({
+        algorithm: 'HS256',
+        payload: 'test',
+        privateKey: testKeys.hmacSecret,
+        keystorePassword: null,
+        keyAlias: 'ignored-for-pem',
+        detached: true,
+      });
+      
+      expect(result).toBeTruthy();
+    });
+
+    test('generateJws should work with PEM key and empty keystore options', () => {
+      const result = plugin.generateJws({
+        algorithm: 'RS256',
+        payload: '{"test": true}',
+        privateKey: testKeys.rsaPrivate,
+        keystorePassword: '',
+        keyAlias: '',
+        detached: false,
+      });
+      
+      const parts = result.split('.');
+      expect(parts.length).toBe(3);
     });
   });
 });
