@@ -21,19 +21,19 @@ Clone the repo directly into your Insomnia plugins folder:
 **macOS:**
 ```bash
 cd ~/Library/Application\ Support/Insomnia/plugins
-git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
+git clone https://github.com/thecoderatekid/insomnia-plugin-jws.git
 ```
 
 **Linux:**
 ```bash
 cd ~/.config/Insomnia/plugins
-git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
+git clone https://github.com/thecoderatekid/insomnia-plugin-jws.git
 ```
 
 **Windows:**
 ```bash
 cd %APPDATA%\Insomnia\plugins
-git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
+git clone https://github.com/thecoderatekid/insomnia-plugin-jws.git
 ```
 
 Then restart Insomnia. That's it — no `npm install` required for PEM keys.
@@ -300,7 +300,7 @@ const signature = generateJws({
 ### Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
+git clone https://github.com/thecoderatekid/insomnia-plugin-jws.git
 cd insomnia-plugin-jws
 npm install
 ```
