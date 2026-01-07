@@ -1,5 +1,8 @@
 # JWSPlugin - Insomnia JWS Signature Generator
 
+[![Test JWSPlugin](https://github.com/thecoderatekid/insomnia-plugin-jws/actions/workflows/test.yml/badge.svg)](https://github.com/thecoderatekid/insomnia-plugin-jws/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/thecoderatekid/insomnia-plugin-jws/branch/main/graph/badge.svg)](https://codecov.io/gh/thecoderatekid/insomnia-plugin-jws)
+
 An Insomnia plugin for generating JWS (JSON Web Signature) signatures, including support for detached payload mode commonly used in API authentication.
 
 ## Features
