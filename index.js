@@ -314,6 +314,7 @@ function generateJws(options) {
     unencoded = false,
     keyId,
     includeIat = true,
+    iatAsString = false,
     additionalHeaders = {},
   } = options;
 
@@ -330,7 +331,8 @@ function generateJws(options) {
 
   // Add issued at timestamp and mark as critical
   if (includeIat) {
-    header.iat = Math.floor(Date.now() / 1000);
+    const iatValue = Math.floor(Date.now() / 1000);
+    header.iat = iatAsString ? String(iatValue) : iatValue;
     header.crit = header.crit ? [...header.crit, 'iat'] : ['iat'];
   }
 
@@ -455,6 +457,12 @@ module.exports.templateTags = [
         defaultValue: true,
       },
       {
+        displayName: 'IAT as String',
+        description: 'Output iat as string instead of number (e.g., "1704672000" vs 1704672000)',
+        type: 'boolean',
+        defaultValue: false,
+      },
+      {
         displayName: 'Additional Headers (JSON)',
         description: 'Additional JWS header fields as JSON object',
         type: 'string',
@@ -474,6 +482,7 @@ module.exports.templateTags = [
       unencoded,
       keyId,
       includeIat,
+      iatAsString,
       additionalHeadersJson,
     ) {
       // Validate private key
@@ -517,6 +526,7 @@ module.exports.templateTags = [
           unencoded,
           keyId: keyId || undefined,
           includeIat,
+          iatAsString,
           additionalHeaders,
         });
       } catch (error) {

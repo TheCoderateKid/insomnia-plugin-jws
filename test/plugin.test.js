@@ -454,7 +454,7 @@ describe('JWSPlugin', () => {
     const jwsTag = plugin.templateTags.find(t => t.name === 'jwsSignature');
 
     test('should have correct number of arguments', () => {
-      expect(jwsTag.args.length).toBe(11);
+      expect(jwsTag.args.length).toBe(12);
     });
 
     test('should have algorithm as first argument with enum type', () => {
@@ -486,7 +486,7 @@ describe('JWSPlugin', () => {
       };
 
       await expect(
-        jwsTag.run(context, 'HS256', '', '', '', 'request_body', '', true, false, '', true, ''),
+        jwsTag.run(context, 'HS256', '', '', '', 'request_body', '', true, false, '', true, false, ''),
       ).rejects.toThrow('Private key or secret is required');
     });
 
@@ -509,6 +509,7 @@ describe('JWSPlugin', () => {
         false, // unencoded
         '',
         true, // includeIat
+        false, // iatAsString
         '',
       );
 
@@ -536,6 +537,7 @@ describe('JWSPlugin', () => {
         false,
         '',
         false, // includeIat - disabled to test payload without iat
+        false, // iatAsString
         '',
       );
 
@@ -564,6 +566,7 @@ describe('JWSPlugin', () => {
         false,
         'my-key-id',
         false, // includeIat
+        false, // iatAsString
         '{"iss": "test-app"}',
       );
 
@@ -594,6 +597,7 @@ describe('JWSPlugin', () => {
           false,
           '',
           true, // includeIat
+          false, // iatAsString
           'invalid json{',
         ),
       ).rejects.toThrow('Invalid additional headers JSON');
@@ -618,6 +622,7 @@ describe('JWSPlugin', () => {
         false,
         '',
         true, // includeIat
+        false, // iatAsString
         '',
       );
 
@@ -648,6 +653,7 @@ describe('JWSPlugin', () => {
         false,
         '',
         false, // includeIat
+        false, // iatAsString
         '',
       );
 
@@ -655,6 +661,67 @@ describe('JWSPlugin', () => {
       const header = JSON.parse(plugin.base64UrlDecode(parts[0]).toString());
 
       expect(header.iat).toBeUndefined();
+    });
+
+    test('run should output iat as string when iatAsString is true', async () => {
+      const context = {
+        request: {
+          getBody: () => ({ text: '{}' }),
+        },
+      };
+
+      const result = await jwsTag.run(
+        context,
+        'HS256',
+        testKeys.hmacSecret,
+        '',
+        '',
+        'request_body',
+        '',
+        false,
+        false,
+        '',
+        true, // includeIat
+        true, // iatAsString
+        '',
+      );
+
+      const parts = result.split('.');
+      const header = JSON.parse(plugin.base64UrlDecode(parts[0]).toString());
+
+      expect(header.iat).toBeDefined();
+      expect(typeof header.iat).toBe('string');
+      expect(header.crit).toContain('iat');
+    });
+
+    test('run should output iat as number when iatAsString is false', async () => {
+      const context = {
+        request: {
+          getBody: () => ({ text: '{}' }),
+        },
+      };
+
+      const result = await jwsTag.run(
+        context,
+        'HS256',
+        testKeys.hmacSecret,
+        '',
+        '',
+        'request_body',
+        '',
+        false,
+        false,
+        '',
+        true, // includeIat
+        false, // iatAsString
+        '',
+      );
+
+      const parts = result.split('.');
+      const header = JSON.parse(plugin.base64UrlDecode(parts[0]).toString());
+
+      expect(header.iat).toBeDefined();
+      expect(typeof header.iat).toBe('number');
     });
   });
 

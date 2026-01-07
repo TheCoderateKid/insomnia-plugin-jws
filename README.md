@@ -75,6 +75,7 @@ Go to **Environment** (Ctrl+E / Cmd+E) and add your signing credentials:
    - **Payload Source**: Request Body
    - **Detached Payload**: ✓ (checked)
    - **Include Issued At (iat)**: ✓ (checked)
+   - **IAT as String**: ☐ (unchecked for number, check for string)
 
 ### 3. Send Request
 
@@ -94,6 +95,7 @@ The plugin will automatically sign your request body and add the signature heade
 | Unencoded Payload | RFC 7797 mode | true/false |
 | Key ID (kid) | Key ID for JWS header | `{{ _.jws_key_id }}` |
 | Include Issued At (iat) | Add iat timestamp with crit: ["iat"] | true (default) |
+| IAT as String | Output iat as string instead of number | false (default) |
 | Additional Headers | Extra JWS header fields | `{"iss": "my-app"}` |
 
 ## Usage Examples
@@ -110,7 +112,7 @@ Environment:
 
 Header value:
 ```
-{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '{{ _.jws_key_id }}', true, '' %}
+{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '{{ _.jws_key_id }}', true, false, '' %}
 ```
 
 Output: `eyJhbGciOiJSUzI1NiIsImtpZCI6Im15LXNpZ25pbmcta2V5LTAwMSIsImlhdCI6MTcwNDY3MjAwMCwiY3JpdCI6WyJpYXQiXX0..signature`
@@ -125,16 +127,33 @@ Output: `eyJhbGciOiJSUzI1NiIsImtpZCI6Im15LXNpZ25pbmcta2V5LTAwMSIsImlhdCI6MTcwNDY
 }
 ```
 
+### IAT as String
+
+For APIs that require `iat` as a string:
+```
+{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '{{ _.jws_key_id }}', true, true, '' %}
+```
+
+**Generated JWS Header:**
+```json
+{
+  "alg": "RS256",
+  "kid": "my-signing-key-001",
+  "iat": "1704672000",
+  "crit": ["iat"]
+}
+```
+
 ### ES256 with Key ID
 
 ```
-{% jwsSignature 'ES256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '{{ _.jws_key_id }}', true, '' %}
+{% jwsSignature 'ES256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '{{ _.jws_key_id }}', true, false, '' %}
 ```
 
 ### HS256 with Custom Headers
 
 ```
-{% jwsSignature 'HS256', '{{ _.hmac_secret }}', '', '', 'request_body', '', false, false, '', true, '{"iss":"my-app"}' %}
+{% jwsSignature 'HS256', '{{ _.hmac_secret }}', '', '', 'request_body', '', false, false, '', true, false, '{"iss":"my-app"}' %}
 ```
 
 ### PKCS#12 Keystore
@@ -151,7 +170,7 @@ Environment:
 
 Header value:
 ```
-{% jwsSignature 'RS256', '{{ _.jws_keystore_path }}', '{{ _.jws_keystore_password }}', '{{ _.jws_key_alias }}', 'request_body', '', true, false, '{{ _.jws_key_id }}', true, '' %}
+{% jwsSignature 'RS256', '{{ _.jws_keystore_path }}', '{{ _.jws_keystore_password }}', '{{ _.jws_key_alias }}', 'request_body', '', true, false, '{{ _.jws_key_id }}', true, false, '' %}
 ```
 
 ### Unencoded Payload (RFC 7797)
@@ -159,10 +178,10 @@ Header value:
 Some APIs require signatures over the raw payload without base64 encoding:
 
 ```
-{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, true, '', true, '' %}
+{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, true, '{{ _.jws_key_id }}', true, false, '' %}
 ```
 
-This adds `"b64": false` and `"crit": ["b64", "iat"]` to the JWS header.
+This adds `"b64": false` and `"crit": ["iat", "b64"]` to the JWS header.
 
 ## Key Formats
 
@@ -288,16 +307,28 @@ const signature = generateJws({
   unencoded: false,
   keyId: 'my-key',
   includeIat: true,        // adds iat timestamp and crit: ["iat"]
+  iatAsString: false,      // true for "1704672000", false for 1704672000
   additionalHeaders: { iss: 'my-app' },
 });
 ```
 
-**Generated header structure:**
+**Generated header (iat as number - default):**
 ```json
 {
   "alg": "RS256",
   "kid": "my-key",
   "iat": 1704672000,
+  "crit": ["iat"],
+  "iss": "my-app"
+}
+```
+
+**Generated header (iat as string):**
+```json
+{
+  "alg": "RS256",
+  "kid": "my-key",
+  "iat": "1704672000",
   "crit": ["iat"],
   "iss": "my-app"
 }
