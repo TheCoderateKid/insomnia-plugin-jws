@@ -1,6 +1,6 @@
 /**
  * JWSPlugin - Insomnia Plugin for JWS Signature Generation
- * 
+ *
  * Supports:
  * - HMAC algorithms: HS256, HS384, HS512
  * - RSA algorithms: RS256, RS384, RS512, PS256, PS384, PS512
@@ -56,18 +56,6 @@ function getCryptoAlgorithm(jwsAlgorithm) {
     'ES256': 'SHA256',
     'ES384': 'SHA384',
     'ES512': 'SHA512',
-  };
-  return mapping[jwsAlgorithm];
-}
-
-/**
- * Get the curve name for ECDSA algorithms
- */
-function getEcCurve(jwsAlgorithm) {
-  const mapping = {
-    'ES256': 'prime256v1',
-    'ES384': 'secp384r1',
-    'ES512': 'secp521r1',
   };
   return mapping[jwsAlgorithm];
 }
@@ -296,7 +284,7 @@ module.exports.templateTags = [
       detached,
       unencoded,
       keyId,
-      additionalHeadersJson
+      additionalHeadersJson,
     ) {
       // Validate private key
       if (!privateKey || privateKey.trim() === '') {
@@ -352,13 +340,13 @@ module.exports.templateTags = [
 module.exports.requestHooks = [
   async (context) => {
     const request = context.request;
-    
+
     // Check if JWS auto-sign is enabled via environment variable
     const autoSign = await context.store.getItem('jws:autoSign');
     if (!autoSign) return;
 
     const config = JSON.parse(autoSign);
-    
+
     // Get the signing key from environment
     const privateKey = await context.store.getItem('jws:privateKey');
     if (!privateKey) return;
@@ -392,7 +380,7 @@ module.exports.workspaceActions = [
   {
     label: 'Configure JWS Auto-Sign',
     icon: 'fa-key',
-    action: async (context, models) => {
+    action: async (context, _models) => {
       const { app } = context;
 
       // Prompt for configuration
@@ -436,7 +424,7 @@ module.exports.workspaceActions = [
   {
     label: 'Disable JWS Auto-Sign',
     icon: 'fa-times',
-    action: async (context, models) => {
+    action: async (context, _models) => {
       await context.store.removeItem('jws:autoSign');
       await context.store.removeItem('jws:privateKey');
       await context.app.alert('Success', 'JWS auto-sign disabled.');

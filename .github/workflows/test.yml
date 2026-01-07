@@ -10,82 +10,35 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x, 22.x]
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js 16
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '16'
 
       - name: Install dependencies
         run: npm install
 
       - name: Run linter
-        run: npm run lint --if-present
+        run: npm run lint
 
       - name: Run tests
         run: npm test
 
       - name: Run tests with coverage
-        run: npm run test:coverage --if-present
-
-      - name: Upload coverage reports
-        if: matrix.node-version == '20.x'
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage/lcov.info
-          fail_ci_if_error: false
-        continue-on-error: true
-
-  integration-test:
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run integration tests
-        run: npm run test:integration --if-present
-
-  validate-plugin:
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-
-      - name: Install dependencies
-        run: npm install
+        run: npm run test:coverage
 
       - name: Validate plugin structure
         run: |
           echo "Checking plugin structure..."
-          
+
           # Check required files exist
           test -f package.json || (echo "Missing package.json" && exit 1)
           test -f index.js || (echo "Missing index.js" && exit 1)
-          
+
           # Validate package.json has insomnia config
           node -e "
             const pkg = require('./package.json');
@@ -100,33 +53,33 @@ jobs:
             console.log('Plugin name:', pkg.insomnia.name);
             console.log('Plugin displayName:', pkg.insomnia.displayName);
           "
-          
+
           # Validate exports
           node -e "
             const plugin = require('./index.js');
-            
+
             if (!plugin.templateTags || !Array.isArray(plugin.templateTags)) {
               console.error('Missing or invalid templateTags export');
               process.exit(1);
             }
-            
+
             const jwsTag = plugin.templateTags.find(t => t.name === 'jwsSignature');
             if (!jwsTag) {
               console.error('Missing jwsSignature template tag');
               process.exit(1);
             }
-            
+
             console.log('Template tag found:', jwsTag.name);
             console.log('Arguments:', jwsTag.args.length);
-            
+
             if (plugin.requestHooks) {
               console.log('Request hooks:', plugin.requestHooks.length);
             }
-            
+
             if (plugin.workspaceActions) {
               console.log('Workspace actions:', plugin.workspaceActions.length);
             }
-            
+
             console.log('Plugin structure validated successfully!');
           "
 

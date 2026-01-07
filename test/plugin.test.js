@@ -485,7 +485,7 @@ describe('JWSPlugin', () => {
       };
 
       await expect(
-        jwsTag.run(context, 'HS256', '', 'request_body', '', true, false, '', '')
+        jwsTag.run(context, 'HS256', '', 'request_body', '', true, false, '', ''),
       ).rejects.toThrow('Private key or secret is required');
     });
 
@@ -505,7 +505,7 @@ describe('JWSPlugin', () => {
         true, // detached
         false, // unencoded
         '',
-        ''
+        '',
       );
 
       expect(result).toBeTruthy();
@@ -529,7 +529,7 @@ describe('JWSPlugin', () => {
         false,
         false,
         '',
-        ''
+        '',
       );
 
       // Verify the payload in the JWT
@@ -554,7 +554,7 @@ describe('JWSPlugin', () => {
         false,
         false,
         'my-key-id',
-        '{"iss": "test-app"}'
+        '{"iss": "test-app"}',
       );
 
       const parts = result.split('.');
@@ -581,8 +581,8 @@ describe('JWSPlugin', () => {
           false,
           false,
           '',
-          'invalid json{'
-        )
+          'invalid json{',
+        ),
       ).rejects.toThrow('Invalid additional headers JSON');
     });
   });
@@ -590,7 +590,7 @@ describe('JWSPlugin', () => {
   describe('Workspace Actions', () => {
     test('should have configure action', () => {
       const configAction = plugin.workspaceActions.find(
-        a => a.label === 'Configure JWS Auto-Sign'
+        a => a.label === 'Configure JWS Auto-Sign',
       );
       expect(configAction).toBeDefined();
       expect(configAction.icon).toBe('fa-key');
@@ -599,7 +599,7 @@ describe('JWSPlugin', () => {
 
     test('should have disable action', () => {
       const disableAction = plugin.workspaceActions.find(
-        a => a.label === 'Disable JWS Auto-Sign'
+        a => a.label === 'Disable JWS Auto-Sign',
       );
       expect(disableAction).toBeDefined();
       expect(disableAction.icon).toBe('fa-times');
