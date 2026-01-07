@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Coverage
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Package lock (optional - some prefer to commit this)
+# package-lock.json
+
+# Test artifacts
+.jest/
+junit.xml
