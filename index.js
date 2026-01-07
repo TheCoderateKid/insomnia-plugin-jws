@@ -102,7 +102,6 @@ function derToJws(derSignature, algorithm) {
  */
 function normalizeKey(key) {
     if (!key) return key;
-    // Replace literal \n with actual newlines (from JSON env vars)
     return key.replace(/\\n/g, '\n');
 }
 

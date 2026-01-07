@@ -102,7 +102,7 @@ Store your key in an environment variable and reference it:
 
 ```
 Header: X-JWS-Signature
-Value: {% jwsSignature 'RS256', '{{ _.private_key }}', 'request_body', '', true, false, '', '' %}
+Value: {% jwsSignature 'RS256', '{{ _.jws_private_key }}', 'request_body', '', true, false, '', '' %}
 ```
 
 Result: `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..signature`
@@ -111,7 +111,7 @@ Result: `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..signature`
 
 ```
 Header: Signature
-Value: {% jwsSignature 'ES256', '{{ _.ec_key }}', 'request_body', '', true, false, 'my-key-123', '' %}
+Value: {% jwsSignature 'ES256', '{{ _.jws_private_key }}', 'request_body', '', true, false, '{{ _.jws_key_id }}', '' %}
 ```
 
 Result: `eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im15LWtleS0xMjMifQ..signature`
@@ -120,7 +120,7 @@ Result: `eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im15LWtleS0xMjMifQ..signatu
 
 ```
 Header: Authorization
-Value: {% jwsSignature 'HS256', 'my-secret', 'request_body', '', false, false, '', '{"iss":"my-app"}' %}
+Value: {% jwsSignature 'HS256', '{{ _.hmac_secret }}', 'request_body', '', false, false, '', '{"iss":"my-app"}' %}
 ```
 
 ### Unencoded Payload (RFC 7797)
@@ -128,8 +128,8 @@ Value: {% jwsSignature 'HS256', 'my-secret', 'request_body', '', false, false, '
 Some APIs require signatures over the raw payload without base64 encoding:
 
 ```
-Header: X-JWS-Signature  
-Value: {% jwsSignature 'RS256', '{{ _.key }}', 'request_body', '', true, true, '', '' %}
+Header: X-JWS-Signature
+Value: {% jwsSignature 'RS256', '{{ _.jws_private_key }}', 'request_body', '', true, true, '', '' %}
 ```
 
 This adds `"b64": false` and `"crit": ["b64"]` to the JWS header.
