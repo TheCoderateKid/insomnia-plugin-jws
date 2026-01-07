@@ -24,19 +24,19 @@ Clone the repo directly into your Insomnia plugins folder:
 **macOS:**
 ```bash
 cd ~/Library/Application\ Support/Insomnia/plugins
-git clone https://github.com/thecoderatekid/insomnia-plugin-jws.git
+git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
 ```
 
 **Linux:**
 ```bash
 cd ~/.config/Insomnia/plugins
-git clone https://github.com/thecoderatekid/insomnia-plugin-jws.git
+git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
 ```
 
 **Windows:**
 ```bash
 cd %APPDATA%\Insomnia\plugins
-git clone https://github.com/thecoderatekid/insomnia-plugin-jws.git
+git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
 ```
 
 Then restart Insomnia. That's it — no `npm install` required for PEM keys.
@@ -56,7 +56,7 @@ Go to **Environment** (Ctrl+E / Cmd+E) and add your signing credentials:
 ```json
 {
   "jws_private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvg...\n-----END PRIVATE KEY-----",
-  "jws_key_id": "my-key-123"
+  "jws_key_id": "my-signing-key-001"
 }
 ```
 
@@ -71,8 +71,10 @@ Go to **Environment** (Ctrl+E / Cmd+E) and add your signing credentials:
 5. Configure the options:
    - **Algorithm**: RS256 (or your preferred algorithm)
    - **Private Key / Keystore**: `{{ _.jws_private_key }}`
+   - **Key ID (kid)**: `{{ _.jws_key_id }}`
    - **Payload Source**: Request Body
    - **Detached Payload**: ✓ (checked)
+   - **Include Issued At (iat)**: ✓ (checked)
 
 ### 3. Send Request
 
@@ -101,21 +103,23 @@ The plugin will automatically sign your request body and add the signature heade
 Environment:
 ```json
 {
-  "jws_private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvg...\n-----END PRIVATE KEY-----"
+  "jws_private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvg...\n-----END PRIVATE KEY-----",
+  "jws_key_id": "my-signing-key-001"
 }
 ```
 
 Header value:
 ```
-{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '', true, '' %}
+{% jwsSignature 'RS256', '{{ _.jws_private_key }}', '', '', 'request_body', '', true, false, '{{ _.jws_key_id }}', true, '' %}
 ```
 
-Output: `eyJhbGciOiJSUzI1NiIsImlhdCI6MTcwNDY3MjAwMCwiY3JpdCI6WyJpYXQiXX0..signature`
+Output: `eyJhbGciOiJSUzI1NiIsImtpZCI6Im15LXNpZ25pbmcta2V5LTAwMSIsImlhdCI6MTcwNDY3MjAwMCwiY3JpdCI6WyJpYXQiXX0..signature`
 
-**Default JWS Header:**
+**Generated JWS Header:**
 ```json
 {
   "alg": "RS256",
+  "kid": "my-signing-key-001",
   "iat": 1704672000,
   "crit": ["iat"]
 }
@@ -140,13 +144,14 @@ Environment:
 {
   "jws_keystore_path": "/path/to/keystore.p12",
   "jws_keystore_password": "changeit",
-  "jws_key_alias": "my-signing-key"
+  "jws_key_alias": "my-signing-key",
+  "jws_key_id": "key-001"
 }
 ```
 
 Header value:
 ```
-{% jwsSignature 'RS256', '{{ _.jws_keystore_path }}', '{{ _.jws_keystore_password }}', '{{ _.jws_key_alias }}', 'request_body', '', true, false, '', true, '' %}
+{% jwsSignature 'RS256', '{{ _.jws_keystore_path }}', '{{ _.jws_keystore_password }}', '{{ _.jws_key_alias }}', 'request_body', '', true, false, '{{ _.jws_key_id }}', true, '' %}
 ```
 
 ### Unencoded Payload (RFC 7797)
@@ -303,7 +308,7 @@ const signature = generateJws({
 ### Setup
 
 ```bash
-git clone https://github.com/thecoderatekid/insomnia-plugin-jws.git
+git clone https://github.com/YOUR_USERNAME/insomnia-plugin-jws.git
 cd insomnia-plugin-jws
 npm install
 ```
